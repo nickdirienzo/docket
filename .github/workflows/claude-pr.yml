@@ -2,28 +2,10 @@ name: Claude PR Review
 on:
   pull_request_review:
     types: [submitted]
-  issue_comment:
-    types: [created]
 
 jobs:
-  # When a review requests changes, post a @claude comment to trigger the respond job
-  trigger:
-    if: github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested'
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-    steps:
-      - name: Post @claude comment
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr comment ${{ github.event.pull_request.number }} \
-            --repo ${{ github.repository }} \
-            --body "@claude Please address the review feedback: ${{ github.event.review.html_url }}"
-
-  # When @claude is mentioned in a PR comment, respond and re-request review
-  respond:
-    if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && github.event.issue.pull_request
+  revise:
+    if: github.event.review.state == 'changes_requested'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -32,6 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -60,13 +43,13 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          trigger_phrase: ""
           claude_args: '--allowedTools "Bash,Edit,Write,Read,mcp__docket__query,mcp__docket__create_task,mcp__docket__update_task,mcp__docket__get_task,mcp__docket__list_tasks,mcp__docket__get_context,mcp__docket__create_project,mcp__docket__update_project,mcp__docket__get_project,mcp__docket__list_projects"'
+          prompt: |
+            A reviewer has requested changes on this PR.
+            Review feedback: ${{ github.event.review.html_url }}
+            Please address all the feedback, push your changes, and leave a comment summarizing what you changed.
       - name: Re-request review
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_NUMBER=${{ github.event.issue.number }}
-          REVIEWERS=$(gh pr view "$PR_NUMBER" --repo ${{ github.repository }} --json reviewRequests --jq '.reviewRequests[].login' 2>/dev/null || true)
-          if [ -z "$REVIEWERS" ]; then
-            gh pr edit "$PR_NUMBER" --repo ${{ github.repository }} --add-reviewer ${{ github.repository_owner }}
-          fi
+        run: gh pr edit ${{ github.event.pull_request.number }} --add-reviewer ${{ github.event.review.user.login }}
