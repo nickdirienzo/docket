@@ -55,6 +55,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           trigger_phrase: ""
+          allowed_bots: "claude[bot]"
           additional_permissions: |
             actions: read
           claude_args: '--allowedTools "Bash,Edit,Write,Read,mcp__docket__query,mcp__docket__create_task,mcp__docket__update_task,mcp__docket__get_task,mcp__docket__list_tasks,mcp__docket__get_context,mcp__docket__create_project,mcp__docket__update_project,mcp__docket__get_project,mcp__docket__list_projects"'
