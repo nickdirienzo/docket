@@ -1,0 +1,19 @@
+name = "docket"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+
+[durable_objects]
+bindings = [
+  { name = "TASK_STORE", class_name = "TaskStore" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TaskStore"]
+
+[vars]
+ENVIRONMENT = "production"
+
+# Secrets (set via `wrangler secret put`):
+# - API_TOKEN
+# - ANTHROPIC_API_KEY (Phase 2)

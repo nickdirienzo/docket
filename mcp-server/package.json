@@ -1,0 +1,16 @@
+{
+	"name": "@docket/mcp-server",
+	"private": true,
+	"type": "module",
+	"bin": "dist/index.js",
+	"scripts": {
+		"build": "tsc",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.6.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.0.0"
+	}
+}
