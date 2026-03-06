@@ -40,6 +40,11 @@ jobs:
             }
           }
           EOF
+      - name: Trigger Claude with review link
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "@claude Please address the review feedback: ${{ github.event.review.html_url }}"
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
