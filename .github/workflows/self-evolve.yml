@@ -21,16 +21,19 @@ jobs:
       - name: Install and build MCP server
         run: npm ci && npm run build --workspace=mcp-server
       - name: Create MCP config
+        env:
+          DOCKET_WORKER_URL: ${{ secrets.DOCKET_WORKER_URL }}
+          DOCKET_API_TOKEN: ${{ secrets.DOCKET_API_TOKEN }}
         run: |
-          cat <<EOF > .mcp.json
+          cat > .mcp.json <<EOF
           {
             "mcpServers": {
               "docket": {
                 "command": "node",
-                "args": ["${{ github.workspace }}/mcp-server/dist/index.js"],
+                "args": ["${GITHUB_WORKSPACE}/mcp-server/dist/index.js"],
                 "env": {
-                  "DOCKET_WORKER_URL": "${{ secrets.DOCKET_WORKER_URL }}",
-                  "DOCKET_API_TOKEN": "${{ secrets.DOCKET_API_TOKEN }}"
+                  "DOCKET_WORKER_URL": "${DOCKET_WORKER_URL}",
+                  "DOCKET_API_TOKEN": "${DOCKET_API_TOKEN}"
                 }
               }
             }
@@ -39,6 +42,7 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_tools: "mcp__docket__query,mcp__docket__create_task,mcp__docket__update_task,mcp__docket__get_task,mcp__docket__list_tasks,mcp__docket__get_context,mcp__docket__create_project,mcp__docket__update_project,mcp__docket__get_project,mcp__docket__list_projects"
           prompt: |
             You have access to Docket via MCP.
 
