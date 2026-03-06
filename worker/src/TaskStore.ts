@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { SCHEMA } from "./schema";
 import type { ActivityLogEntry, Env, Project, Task } from "./types";
 import { PROJECT_STATUSES, TASK_PRIORITIES, TASK_STATUSES } from "./types";
 import { ulid } from "./ulid";
@@ -12,21 +13,12 @@ import {
 
 type SqlRow = Record<string, SqlStorageValue>;
 
-/* eslint-disable -- schema is intentionally compact */
-const SCHEMA = [
-	"CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, summary TEXT, description TEXT, status TEXT NOT NULL DEFAULT 'not_started', priority TEXT, assignee TEXT, tags TEXT, estimate INTEGER, project_id TEXT, parent_task_id TEXT, customer TEXT, pr_url TEXT, due_date TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
-	"CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, status TEXT NOT NULL DEFAULT 'backlog', priority TEXT, owner TEXT, customer TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
-	"CREATE TABLE IF NOT EXISTS activity_log (id TEXT PRIMARY KEY, tool_name TEXT NOT NULL, input TEXT NOT NULL, output TEXT, agent_id TEXT, created_at TEXT NOT NULL)",
-	"CREATE TABLE IF NOT EXISTS observations (id TEXT PRIMARY KEY, content TEXT NOT NULL, type TEXT NOT NULL, source_ids TEXT, created_at TEXT NOT NULL)",
-].join(";");
-
 export class TaskStore extends DurableObject<Env> {
 	private initialized = false;
 
 	private ensureSchema(): void {
 		if (this.initialized) return;
 		this.ctx.storage.sql.exec(SCHEMA);
-		// Migration: add columns introduced after initial schema
 		try {
 			this.ctx.storage.sql.exec("ALTER TABLE tasks ADD COLUMN summary TEXT");
 		} catch {}
@@ -256,9 +248,9 @@ export class TaskStore extends DurableObject<Env> {
 	getActivitySinceLastObservation(): unknown[] {
 		const lastObs = this.q("SELECT created_at FROM observations ORDER BY created_at DESC LIMIT 1");
 		const since = (lastObs[0] as { created_at: string } | undefined)?.created_at;
-		if (since)
-			return this.q("SELECT * FROM activity_log WHERE created_at > ? ORDER BY created_at", since);
-		return this.q("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 50");
+		return since
+			? this.q("SELECT * FROM activity_log WHERE created_at > ? ORDER BY created_at", since)
+			: this.q("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 50");
 	}
 
 	storeObservation(
@@ -280,10 +272,9 @@ export class TaskStore extends DurableObject<Env> {
 	}
 
 	getRecentObservations(limit = 10): unknown[] {
-		return this.q(
-			"SELECT * FROM observations WHERE type = 'observation' ORDER BY created_at DESC LIMIT ?",
-			limit,
-		);
+		const sql =
+			"SELECT * FROM observations WHERE type = 'observation' ORDER BY created_at DESC LIMIT ?";
+		return this.q(sql, limit);
 	}
 
 	getObservationCount(): number {
