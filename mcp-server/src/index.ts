@@ -55,7 +55,10 @@ server.tool(
 	"Create a new task",
 	{
 		title: z.string().describe("Task title (required)"),
-		summary: z.string().optional().describe("Brief one-line summary of current task state or progress"),
+		summary: z
+			.string()
+			.optional()
+			.describe("Brief one-line summary of current task state or progress"),
 		description: z.string().optional().describe("Task description"),
 		status: z
 			.enum(["not_started", "in_progress", "done", "archived"])
@@ -86,7 +89,10 @@ server.tool(
 	{
 		id: z.string().describe("Task ID"),
 		title: z.string().optional(),
-		summary: z.string().optional().describe("Brief one-line summary of current task state or progress"),
+		summary: z
+			.string()
+			.optional()
+			.describe("Brief one-line summary of current task state or progress"),
 		description: z.string().optional(),
 		status: z.enum(["not_started", "in_progress", "done", "archived"]).optional(),
 		priority: z.enum(["backlog", "low", "medium", "high", "urgent"]).optional(),
@@ -116,7 +122,10 @@ server.tool(
 		assignee: z.string().optional(),
 		project_id: z.string().optional(),
 		customer: z.string().optional(),
-		tags: z.array(z.string()).optional().describe("Filter by one or more tag values (e.g. ['phase-1', 'backend'])"),
+		tags: z
+			.array(z.string())
+			.optional()
+			.describe("Filter by one or more tag values (e.g. ['phase-1', 'backend'])"),
 	},
 	async (input) => {
 		const params = new URLSearchParams();

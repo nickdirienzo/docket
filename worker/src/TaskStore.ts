@@ -27,7 +27,9 @@ export class TaskStore extends DurableObject<Env> {
 		if (this.initialized) return;
 		this.ctx.storage.sql.exec(SCHEMA);
 		// Migration: add columns introduced after initial schema
-		try { this.ctx.storage.sql.exec("ALTER TABLE tasks ADD COLUMN summary TEXT"); } catch {}
+		try {
+			this.ctx.storage.sql.exec("ALTER TABLE tasks ADD COLUMN summary TEXT");
+		} catch {}
 		this.initialized = true;
 	}
 
@@ -99,9 +101,13 @@ export class TaskStore extends DurableObject<Env> {
 		const allParams = [...params];
 		let sql = `SELECT * FROM tasks ${where}`;
 		const tagFilter = filters.tags;
-		const tags: string[] = Array.isArray(tagFilter) ? tagFilter.filter((t): t is string => typeof t === "string") : typeof tagFilter === "string" ? [tagFilter] : [];
+		const tags: string[] = Array.isArray(tagFilter)
+			? tagFilter.filter((t): t is string => typeof t === "string")
+			: typeof tagFilter === "string"
+				? [tagFilter]
+				: [];
 		if (tags.length > 0) {
-			sql += (where ? " AND" : " WHERE") + ` EXISTS (SELECT 1 FROM json_each(tags) WHERE value IN (${tags.map(() => "?").join(",")}))`;
+			sql += `${where ? " AND" : " WHERE"} EXISTS (SELECT 1 FROM json_each(tags) WHERE value IN (${tags.map(() => "?").join(",")}))`;
 			allParams.push(...tags);
 		}
 		sql += " ORDER BY created_at DESC";
@@ -255,7 +261,11 @@ export class TaskStore extends DurableObject<Env> {
 		return this.q("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 50");
 	}
 
-	storeObservation(content: string, type: "observation" | "reflection", sourceIds?: string[]): unknown {
+	storeObservation(
+		content: string,
+		type: "observation" | "reflection",
+		sourceIds?: string[],
+	): unknown {
 		const id = ulid();
 		const now = new Date().toISOString();
 		this.q(
@@ -277,7 +287,9 @@ export class TaskStore extends DurableObject<Env> {
 	}
 
 	getObservationCount(): number {
-		const row = this.q("SELECT COUNT(*) as count FROM observations WHERE type = 'observation'")[0] as { count: number } | undefined;
+		const row = this.q(
+			"SELECT COUNT(*) as count FROM observations WHERE type = 'observation'",
+		)[0] as { count: number } | undefined;
 		return row?.count ?? 0;
 	}
 
