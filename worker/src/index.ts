@@ -124,12 +124,16 @@ app.post("/activity", async (c) => {
 
 // --- Observer ---
 
-app.post("/observe", async (c) => {
-	const apiKey = c.env.ANTHROPIC_API_KEY;
-	if (!apiKey) {
-		return c.json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
-	}
-	const store = getStore(c.env);
+function getAuth(env: Env) {
+	return { apiKey: env.ANTHROPIC_API_KEY, oauthToken: env.ANTHROPIC_OAUTH_TOKEN };
+}
+
+function hasAuth(env: Env): boolean {
+	return Boolean(env.ANTHROPIC_API_KEY || env.ANTHROPIC_OAUTH_TOKEN);
+}
+
+async function runObserver(env: Env): Promise<{ observation: unknown; reflection: unknown }> {
+	const store = getStore(env);
 	const recentActivity = await store.getActivitySinceLastObservation();
 	const existingObservations = await store.getRecentObservations(5);
 
@@ -137,14 +141,13 @@ app.post("/observe", async (c) => {
 	const content = await generateObservations({
 		recentActivity,
 		existingObservations,
-		anthropicApiKey: apiKey,
+		auth: getAuth(env),
 	});
 
 	const observation = await store.storeObservation(content, "observation");
 
-	// Check if we should trigger a reflection (every ~10 observations)
-	const count = await store.getObservationCount();
 	let reflection = null;
+	const count = await store.getObservationCount();
 	if (count > 0 && count % 10 === 0) {
 		const recent = await store.getRecentObservations(10);
 		const { generateReflection } = await import("./observer");
@@ -152,7 +155,18 @@ app.post("/observe", async (c) => {
 		reflection = await store.storeObservation(reflectionContent, "reflection");
 	}
 
-	return c.json({ observation, reflection });
+	return { observation, reflection };
+}
+
+app.post("/observe", async (c) => {
+	if (!hasAuth(c.env)) {
+		return c.json(
+			{ error: "No Anthropic auth configured (set ANTHROPIC_API_KEY or ANTHROPIC_OAUTH_TOKEN)" },
+			500,
+		);
+	}
+	const result = await runObserver(c.env);
+	return c.json(result);
 });
 
 // Error handler
@@ -165,31 +179,11 @@ app.onError((err, c) => {
 export default {
 	fetch: app.fetch,
 	async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
-		if (!env.ANTHROPIC_API_KEY) {
-			console.log("[docket] Skipping observer: ANTHROPIC_API_KEY not set");
+		if (!hasAuth(env)) {
+			console.log("[docket] Skipping observer: no Anthropic auth configured");
 			return;
 		}
-		const store = getStore(env);
-		const recentActivity = await store.getActivitySinceLastObservation();
-		const existingObservations = await store.getRecentObservations(5);
-
-		const { generateObservations } = await import("./observer");
-		const content = await generateObservations({
-			recentActivity,
-			existingObservations,
-			anthropicApiKey: env.ANTHROPIC_API_KEY,
-		});
-
-		await store.storeObservation(content, "observation");
-
-		const count = await store.getObservationCount();
-		if (count > 0 && count % 10 === 0) {
-			const recent = await store.getRecentObservations(10);
-			const { generateReflection } = await import("./observer");
-			const reflectionContent = await generateReflection(recent as never);
-			await store.storeObservation(reflectionContent, "reflection");
-		}
-
+		await runObserver(env);
 		console.log("[docket] Observer completed");
 	},
 };

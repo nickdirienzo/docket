@@ -4,6 +4,7 @@ export interface Env {
 	TASK_STORE: DurableObjectNamespace<TaskStore>;
 	API_TOKEN: string;
 	ANTHROPIC_API_KEY?: string;
+	ANTHROPIC_OAUTH_TOKEN?: string;
 	ENVIRONMENT: string;
 }
 
