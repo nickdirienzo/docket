@@ -1,0 +1,50 @@
+name: Self-Evolve
+on:
+  schedule:
+    - cron: '0 8 * * 1' # Weekly Monday 8am UTC
+  workflow_dispatch:
+
+jobs:
+  evolve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install and build MCP server
+        run: npm ci && npm run build --workspace=mcp-server
+      - name: Create MCP config
+        run: |
+          cat <<EOF > .mcp.json
+          {
+            "mcpServers": {
+              "docket": {
+                "command": "node",
+                "args": ["${{ github.workspace }}/mcp-server/dist/index.js"],
+                "env": {
+                  "DOCKET_WORKER_URL": "${{ secrets.DOCKET_WORKER_URL }}",
+                  "DOCKET_API_TOKEN": "${{ secrets.DOCKET_API_TOKEN }}"
+                }
+              }
+            }
+          }
+          EOF
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            You have access to Docket via MCP.
+
+            1. Query the activity_log for the past week
+            2. Read past observations so you don't repeat yourself
+            3. Look for patterns: repeated multi-step sequences,
+               missing fields, common queries, friction points
+            4. Decide what to improve (conventions, tools, schema, code)
+            5. Make the changes and open a PR
+            6. Store an observation in Docket summarizing what you did and why
