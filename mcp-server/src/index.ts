@@ -114,6 +114,7 @@ server.tool(
 		assignee: z.string().optional(),
 		project_id: z.string().optional(),
 		customer: z.string().optional(),
+		tag: z.string().optional().describe("Filter by tag value (e.g. 'phase-1')"),
 	},
 	async (input) => {
 		const params = new URLSearchParams();

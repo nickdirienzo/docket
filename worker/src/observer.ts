@@ -1,5 +1,3 @@
-import type { Observation } from "./types";
-
 const SYSTEM_PROMPT = `You are an observer agent for Docket, a task/project management system.
 Analyze recent task activity and produce concise observations about:
 - Patterns (what's being worked on, what's stalling)
@@ -58,8 +56,42 @@ export async function generateObservations(input: ObserveInput): Promise<string>
 	return data.content[0]?.text ?? "No observations generated.";
 }
 
-export async function generateReflection(observations: Observation[]): Promise<string> {
-	// Phase 2 stub — will compress observations into higher-level reflections
-	// For now, just summarize the count
-	return `Reflection over ${observations.length} observations. Detailed reflection coming in next iteration.`;
+const REFLECTION_PROMPT = `You are a meta-observer for Docket. Given a set of recent observations, produce a high-level reflection that synthesizes them.
+Focus on:
+- Sustained trends (not one-off events)
+- Recurring blockers or friction points
+- Overall progress trajectory across projects/phases
+- 1-2 concrete recommendations for what to tackle next
+
+Output 3-5 bullet points. Be strategic and concise. Avoid repeating specific task IDs unless critical.`;
+
+export async function generateReflection(observations: unknown[], apiKey: string): Promise<string> {
+	if (observations.length === 0) {
+		return "No observations to reflect on.";
+	}
+
+	const userContent = `## Observations to Compress\n${JSON.stringify(observations, null, 2)}`;
+
+	const res = await fetch("https://api.anthropic.com/v1/messages", {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			"anthropic-version": "2023-06-01",
+			"x-api-key": apiKey,
+		},
+		body: JSON.stringify({
+			model: "claude-haiku-4-5-20251001",
+			max_tokens: 1024,
+			system: REFLECTION_PROMPT,
+			messages: [{ role: "user", content: userContent }],
+		}),
+	});
+
+	if (!res.ok) {
+		const err = await res.text();
+		throw new Error(`Claude API error ${res.status}: ${err}`);
+	}
+
+	const data = (await res.json()) as ClaudeMessage;
+	return data.content[0]?.text ?? "No reflection generated.";
 }

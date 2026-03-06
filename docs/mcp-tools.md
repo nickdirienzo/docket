@@ -16,7 +16,7 @@ Update an existing task.
 
 ### list_tasks
 List tasks with optional filters.
-- **Optional filters**: status, assignee, project_id, tags, customer
+- **Optional filters**: status, assignee, project_id, tag, customer
 - **Returns**: array of tasks
 
 ### get_task
@@ -60,4 +60,4 @@ Execute a read-only SQL query against the database.
 ### get_context
 Get recent observations and activity summary. Call this to understand "what's going on" before deciding what to work on.
 - **No parameters**
-- **Returns**: { observations: [], recent_activity: [], summary: string }
+- **Returns**: { observations: [], recent_activity: [] }

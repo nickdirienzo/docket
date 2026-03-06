@@ -7,7 +7,7 @@ Base URL: configured per environment. Auth: `Authorization: Bearer <token>`.
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | /tasks | Create a task |
-| GET | /tasks | List tasks (query params: status, assignee, project_id, tags, customer) |
+| GET | /tasks | List tasks (query params: status, assignee, project_id, tag, customer) |
 | GET | /tasks/:id | Get task by ID (includes sub-tasks) |
 | PATCH | /tasks/:id | Update task fields |
 

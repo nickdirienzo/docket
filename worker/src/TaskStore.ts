@@ -92,10 +92,15 @@ export class TaskStore extends DurableObject<Env> {
 
 	listTasks(filters: Record<string, unknown>): Task[] {
 		const { where, params } = buildWhere(filters, ["status", "assignee", "project_id", "customer"]);
-		return this.q(
-			`SELECT * FROM tasks ${where} ORDER BY created_at DESC`,
-			...params,
-		) as unknown as Task[];
+		const allParams = [...params];
+		let sql = `SELECT * FROM tasks ${where}`;
+		if (filters.tag && typeof filters.tag === "string") {
+			sql += where ? " AND" : " WHERE";
+			sql += " EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)";
+			allParams.push(filters.tag);
+		}
+		sql += " ORDER BY created_at DESC";
+		return this.q(sql, ...allParams) as unknown as Task[];
 	}
 
 	updateTask(id: string, updates: Record<string, unknown>): Task | null {
