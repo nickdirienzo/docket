@@ -1,0 +1,65 @@
+name: Claude CI Fix
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+jobs:
+  fix:
+    if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Get PR info
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=$(gh api repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }}/pulls --jq '.[0].number')
+          PR_BRANCH=$(gh api repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }}/pulls --jq '.[0].head.ref')
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "branch=$PR_BRANCH" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.branch }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install and build MCP server
+        run: npm ci && npm run build --workspace=mcp-server
+      - name: Create MCP config
+        env:
+          DOCKET_WORKER_URL: ${{ secrets.DOCKET_WORKER_URL }}
+          DOCKET_API_TOKEN: ${{ secrets.DOCKET_API_TOKEN }}
+        run: |
+          cat > .mcp.json <<EOF
+          {
+            "mcpServers": {
+              "docket": {
+                "command": "node",
+                "args": ["${GITHUB_WORKSPACE}/mcp-server/dist/index.js"],
+                "env": {
+                  "DOCKET_WORKER_URL": "${DOCKET_WORKER_URL}",
+                  "DOCKET_API_TOKEN": "${DOCKET_API_TOKEN}"
+                }
+              }
+            }
+          }
+          EOF
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          trigger_phrase: ""
+          additional_permissions: |
+            actions: read
+          claude_args: '--allowedTools "Bash,Edit,Write,Read,mcp__docket__query,mcp__docket__create_task,mcp__docket__update_task,mcp__docket__get_task,mcp__docket__list_tasks,mcp__docket__get_context,mcp__docket__create_project,mcp__docket__update_project,mcp__docket__get_project,mcp__docket__list_projects"'
+          prompt: |
+            CI failed on PR #${{ steps.pr.outputs.number }}.
+            Failed run: https://github.com/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}
+            Use the CI MCP tools to read the failed job logs, diagnose the issue, fix it, and push.
+            Leave a comment on PR #${{ steps.pr.outputs.number }} summarizing what failed and what you fixed.
