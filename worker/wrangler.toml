@@ -19,4 +19,4 @@ crons = ["0 */6 * * *"]  # Every 6 hours
 
 # Secrets (set via `wrangler secret put`):
 # - API_TOKEN
-# - ANTHROPIC_API_KEY (or ANTHROPIC_OAUTH_TOKEN — one is required for observer)
+# - ANTHROPIC_API_KEY (required for observer)

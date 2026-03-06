@@ -124,14 +124,6 @@ app.post("/activity", async (c) => {
 
 // --- Observer ---
 
-function getAuth(env: Env) {
-	return { apiKey: env.ANTHROPIC_API_KEY, oauthToken: env.ANTHROPIC_OAUTH_TOKEN };
-}
-
-function hasAuth(env: Env): boolean {
-	return Boolean(env.ANTHROPIC_API_KEY || env.ANTHROPIC_OAUTH_TOKEN);
-}
-
 async function runObserver(env: Env): Promise<{ observation: unknown; reflection: unknown }> {
 	const store = getStore(env);
 	const recentActivity = await store.getActivitySinceLastObservation();
@@ -141,7 +133,7 @@ async function runObserver(env: Env): Promise<{ observation: unknown; reflection
 	const content = await generateObservations({
 		recentActivity,
 		existingObservations,
-		auth: getAuth(env),
+		apiKey: env.ANTHROPIC_API_KEY ?? "",
 	});
 
 	const observation = await store.storeObservation(content, "observation");
@@ -159,11 +151,8 @@ async function runObserver(env: Env): Promise<{ observation: unknown; reflection
 }
 
 app.post("/observe", async (c) => {
-	if (!hasAuth(c.env)) {
-		return c.json(
-			{ error: "No Anthropic auth configured (set ANTHROPIC_API_KEY or ANTHROPIC_OAUTH_TOKEN)" },
-			500,
-		);
+	if (!c.env.ANTHROPIC_API_KEY) {
+		return c.json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
 	}
 	const result = await runObserver(c.env);
 	return c.json(result);
@@ -179,8 +168,8 @@ app.onError((err, c) => {
 export default {
 	fetch: app.fetch,
 	async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
-		if (!hasAuth(env)) {
-			console.log("[docket] Skipping observer: no Anthropic auth configured");
+		if (!env.ANTHROPIC_API_KEY) {
+			console.log("[docket] Skipping observer: ANTHROPIC_API_KEY not set");
 			return;
 		}
 		await runObserver(env);

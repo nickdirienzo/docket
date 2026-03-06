@@ -9,33 +9,18 @@ Analyze recent task activity and produce concise observations about:
 
 Output 2-5 bullet points. Be specific and actionable. Reference task/project IDs when relevant.`;
 
-interface AnthropicAuth {
-	apiKey?: string;
-	oauthToken?: string;
-}
-
 interface ObserveInput {
 	recentActivity: unknown[];
 	existingObservations: unknown[];
-	auth: AnthropicAuth;
+	apiKey: string;
 }
 
 interface ClaudeMessage {
 	content: { type: string; text: string }[];
 }
 
-function buildAuthHeaders(auth: AnthropicAuth): Record<string, string> {
-	if (auth.oauthToken) {
-		return { Authorization: `Bearer ${auth.oauthToken}` };
-	}
-	if (auth.apiKey) {
-		return { "x-api-key": auth.apiKey };
-	}
-	throw new Error("No Anthropic auth configured. Set ANTHROPIC_API_KEY or ANTHROPIC_OAUTH_TOKEN.");
-}
-
 export async function generateObservations(input: ObserveInput): Promise<string> {
-	const { recentActivity, existingObservations, auth } = input;
+	const { recentActivity, existingObservations, apiKey } = input;
 
 	if (recentActivity.length === 0) {
 		return "No new activity since last observation.";
@@ -54,7 +39,7 @@ export async function generateObservations(input: ObserveInput): Promise<string>
 		headers: {
 			"Content-Type": "application/json",
 			"anthropic-version": "2023-06-01",
-			...buildAuthHeaders(auth),
+			"x-api-key": apiKey,
 		},
 		body: JSON.stringify({
 			model: "claude-haiku-4-5-20251001",
