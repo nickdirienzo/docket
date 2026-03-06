@@ -5,6 +5,7 @@
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
+  summary TEXT,
   description TEXT,
   status TEXT NOT NULL DEFAULT 'not_started',
   priority TEXT,

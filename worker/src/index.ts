@@ -37,7 +37,7 @@ app.get("/tasks", async (c) => {
 		assignee: c.req.query("assignee"),
 		project_id: c.req.query("project_id"),
 		customer: c.req.query("customer"),
-		tag: c.req.query("tag"),
+		tags: c.req.queries("tag"),
 	};
 	const store = getStore(c.env);
 	const tasks = await store.listTasks(filters);

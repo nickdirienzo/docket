@@ -55,6 +55,7 @@ server.tool(
 	"Create a new task",
 	{
 		title: z.string().describe("Task title (required)"),
+		summary: z.string().optional().describe("Brief one-line summary of current task state or progress"),
 		description: z.string().optional().describe("Task description"),
 		status: z
 			.enum(["not_started", "in_progress", "done", "archived"])
@@ -85,6 +86,7 @@ server.tool(
 	{
 		id: z.string().describe("Task ID"),
 		title: z.string().optional(),
+		summary: z.string().optional().describe("Brief one-line summary of current task state or progress"),
 		description: z.string().optional(),
 		status: z.enum(["not_started", "in_progress", "done", "archived"]).optional(),
 		priority: z.enum(["backlog", "low", "medium", "high", "urgent"]).optional(),
@@ -114,12 +116,16 @@ server.tool(
 		assignee: z.string().optional(),
 		project_id: z.string().optional(),
 		customer: z.string().optional(),
-		tag: z.string().optional().describe("Filter by tag value (e.g. 'phase-1')"),
+		tags: z.array(z.string()).optional().describe("Filter by one or more tag values (e.g. ['phase-1', 'backend'])"),
 	},
 	async (input) => {
 		const params = new URLSearchParams();
-		for (const [k, v] of Object.entries(input)) {
-			if (v) params.set(k, v);
+		const { tags, ...rest } = input;
+		for (const [k, v] of Object.entries(rest)) {
+			if (v) params.set(k, v as string);
+		}
+		if (tags && tags.length > 0) {
+			for (const tag of tags) params.append("tag", tag);
 		}
 		const qs = params.toString();
 		const path = qs ? `/tasks?${qs}` : "/tasks";

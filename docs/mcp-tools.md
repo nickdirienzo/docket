@@ -5,7 +5,7 @@
 ### create_task
 Create a new task.
 - **Required**: title
-- **Optional**: description, status, priority, assignee, tags, estimate, project_id, parent_task_id, customer, due_date
+- **Optional**: summary, description, status, priority, assignee, tags, estimate, project_id, parent_task_id, customer, due_date
 - **Returns**: the created task
 
 ### update_task
@@ -16,7 +16,7 @@ Update an existing task.
 
 ### list_tasks
 List tasks with optional filters.
-- **Optional filters**: status, assignee, project_id, tag, customer
+- **Optional filters**: status, assignee, project_id, tags (array, matches any), customer
 - **Returns**: array of tasks
 
 ### get_task
