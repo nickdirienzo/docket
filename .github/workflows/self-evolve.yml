@@ -42,7 +42,8 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: '--allowedTools "mcp__docket__query,mcp__docket__create_task,mcp__docket__update_task,mcp__docket__get_task,mcp__docket__list_tasks,mcp__docket__get_context,mcp__docket__create_project,mcp__docket__update_project,mcp__docket__get_project,mcp__docket__list_projects"'
+          show_full_output: true
+          claude_args: '--allowedTools "Bash,Edit,Write,Read,mcp__docket__query,mcp__docket__create_task,mcp__docket__update_task,mcp__docket__get_task,mcp__docket__list_tasks,mcp__docket__get_context,mcp__docket__create_project,mcp__docket__update_project,mcp__docket__get_project,mcp__docket__list_projects"'
           prompt: |
             You have access to Docket via MCP.
 
