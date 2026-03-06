@@ -122,6 +122,39 @@ app.post("/activity", async (c) => {
 	return c.json(entry, 201);
 });
 
+// --- Observer ---
+
+app.post("/observe", async (c) => {
+	const apiKey = c.env.ANTHROPIC_API_KEY;
+	if (!apiKey) {
+		return c.json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
+	}
+	const store = getStore(c.env);
+	const recentActivity = await store.getActivitySinceLastObservation();
+	const existingObservations = await store.getRecentObservations(5);
+
+	const { generateObservations } = await import("./observer");
+	const content = await generateObservations({
+		recentActivity,
+		existingObservations,
+		anthropicApiKey: apiKey,
+	});
+
+	const observation = await store.storeObservation(content, "observation");
+
+	// Check if we should trigger a reflection (every ~10 observations)
+	const count = await store.getObservationCount();
+	let reflection = null;
+	if (count > 0 && count % 10 === 0) {
+		const recent = await store.getRecentObservations(10);
+		const { generateReflection } = await import("./observer");
+		const reflectionContent = await generateReflection(recent as never);
+		reflection = await store.storeObservation(reflectionContent, "reflection");
+	}
+
+	return c.json({ observation, reflection });
+});
+
 // Error handler
 app.onError((err, c) => {
 	console.error(`[docket] ${err.message}`, { stack: err.stack });
@@ -129,4 +162,34 @@ app.onError((err, c) => {
 	return c.json({ error: err.message }, status);
 });
 
-export default app;
+export default {
+	fetch: app.fetch,
+	async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
+		if (!env.ANTHROPIC_API_KEY) {
+			console.log("[docket] Skipping observer: ANTHROPIC_API_KEY not set");
+			return;
+		}
+		const store = getStore(env);
+		const recentActivity = await store.getActivitySinceLastObservation();
+		const existingObservations = await store.getRecentObservations(5);
+
+		const { generateObservations } = await import("./observer");
+		const content = await generateObservations({
+			recentActivity,
+			existingObservations,
+			anthropicApiKey: env.ANTHROPIC_API_KEY,
+		});
+
+		await store.storeObservation(content, "observation");
+
+		const count = await store.getObservationCount();
+		if (count > 0 && count % 10 === 0) {
+			const recent = await store.getRecentObservations(10);
+			const { generateReflection } = await import("./observer");
+			const reflectionContent = await generateReflection(recent as never);
+			await store.storeObservation(reflectionContent, "reflection");
+		}
+
+		console.log("[docket] Observer completed");
+	},
+};

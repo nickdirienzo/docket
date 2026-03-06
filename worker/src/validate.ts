@@ -34,3 +34,18 @@ export function validatedEstimate(val: unknown): number | null {
 	}
 	return num;
 }
+
+export function buildWhere(
+	filters: Record<string, unknown>,
+	keys: string[],
+): { where: string; params: unknown[] } {
+	const conditions: string[] = [];
+	const params: unknown[] = [];
+	for (const key of keys) {
+		if (filters[key]) {
+			conditions.push(`${key} = ?`);
+			params.push(filters[key]);
+		}
+	}
+	return { where: conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "", params };
+}

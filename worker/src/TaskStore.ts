@@ -2,31 +2,23 @@ import { DurableObject } from "cloudflare:workers";
 import type { ActivityLogEntry, Env, Project, Task } from "./types";
 import { PROJECT_STATUSES, TASK_PRIORITIES, TASK_STATUSES } from "./types";
 import { ulid } from "./ulid";
-import { asStringOrNull, validatedEnum, validatedEnumOrNull, validatedEstimate } from "./validate";
+import {
+	asStringOrNull,
+	buildWhere,
+	validatedEnum,
+	validatedEnumOrNull,
+	validatedEstimate,
+} from "./validate";
 
 type SqlRow = Record<string, SqlStorageValue>;
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS tasks (
-	id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT,
-	status TEXT NOT NULL DEFAULT 'not_started', priority TEXT,
-	assignee TEXT, tags TEXT, estimate INTEGER, project_id TEXT,
-	parent_task_id TEXT, customer TEXT, pr_url TEXT, due_date TEXT,
-	created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS projects (
-	id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT,
-	status TEXT NOT NULL DEFAULT 'backlog', priority TEXT,
-	owner TEXT, customer TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS activity_log (
-	id TEXT PRIMARY KEY, tool_name TEXT NOT NULL, input TEXT NOT NULL,
-	output TEXT, agent_id TEXT, created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS observations (
-	id TEXT PRIMARY KEY, content TEXT NOT NULL, type TEXT NOT NULL,
-	source_ids TEXT, created_at TEXT NOT NULL
-);`;
+/* eslint-disable -- schema is intentionally compact */
+const SCHEMA = [
+	"CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT, status TEXT NOT NULL DEFAULT 'not_started', priority TEXT, assignee TEXT, tags TEXT, estimate INTEGER, project_id TEXT, parent_task_id TEXT, customer TEXT, pr_url TEXT, due_date TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+	"CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, status TEXT NOT NULL DEFAULT 'backlog', priority TEXT, owner TEXT, customer TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+	"CREATE TABLE IF NOT EXISTS activity_log (id TEXT PRIMARY KEY, tool_name TEXT NOT NULL, input TEXT NOT NULL, output TEXT, agent_id TEXT, created_at TEXT NOT NULL)",
+	"CREATE TABLE IF NOT EXISTS observations (id TEXT PRIMARY KEY, content TEXT NOT NULL, type TEXT NOT NULL, source_ids TEXT, created_at TEXT NOT NULL)",
+].join(";");
 
 export class TaskStore extends DurableObject<Env> {
 	private initialized = false;
@@ -35,6 +27,11 @@ export class TaskStore extends DurableObject<Env> {
 		if (this.initialized) return;
 		this.ctx.storage.sql.exec(SCHEMA);
 		this.initialized = true;
+	}
+
+	private q(sql: string, ...params: unknown[]): SqlRow[] {
+		this.ensureSchema();
+		return [...this.ctx.storage.sql.exec<SqlRow>(sql, ...params)];
 	}
 
 	createTask(input: Record<string, unknown>): Task {
@@ -84,28 +81,21 @@ export class TaskStore extends DurableObject<Env> {
 	}
 
 	getTask(id: string): (Task & { sub_tasks: Task[] }) | null {
-		this.ensureSchema();
-		const rows = [...this.ctx.storage.sql.exec<SqlRow>("SELECT * FROM tasks WHERE id = ?", id)];
-		const task = rows[0] as Task | undefined;
+		const task = this.q("SELECT * FROM tasks WHERE id = ?", id)[0] as Task | undefined;
 		if (!task) return null;
-		const sub_tasks = [
-			...this.ctx.storage.sql.exec<SqlRow>(
-				"SELECT * FROM tasks WHERE parent_task_id = ? ORDER BY created_at",
-				id,
-			),
-		] as unknown as Task[];
+		const sub_tasks = this.q(
+			"SELECT * FROM tasks WHERE parent_task_id = ? ORDER BY created_at",
+			id,
+		) as unknown as Task[];
 		return { ...task, sub_tasks };
 	}
 
 	listTasks(filters: Record<string, unknown>): Task[] {
-		this.ensureSchema();
 		const { where, params } = buildWhere(filters, ["status", "assignee", "project_id", "customer"]);
-		return [
-			...this.ctx.storage.sql.exec<SqlRow>(
-				`SELECT * FROM tasks ${where} ORDER BY created_at DESC`,
-				...params,
-			),
-		] as unknown as Task[];
+		return this.q(
+			`SELECT * FROM tasks ${where} ORDER BY created_at DESC`,
+			...params,
+		) as unknown as Task[];
 	}
 
 	updateTask(id: string, updates: Record<string, unknown>): Task | null {
@@ -178,30 +168,23 @@ export class TaskStore extends DurableObject<Env> {
 	}
 
 	getProject(id: string): (Project & { task_summary: Record<string, number> }) | null {
-		this.ensureSchema();
-		const rows = [...this.ctx.storage.sql.exec<SqlRow>("SELECT * FROM projects WHERE id = ?", id)];
-		const project = rows[0] as Project | undefined;
+		const project = this.q("SELECT * FROM projects WHERE id = ?", id)[0] as Project | undefined;
 		if (!project) return null;
-		const counts = [
-			...this.ctx.storage.sql.exec<SqlRow>(
-				"SELECT status, COUNT(*) as count FROM tasks WHERE project_id = ? GROUP BY status",
-				id,
-			),
-		] as unknown as { status: string; count: number }[];
+		const counts = this.q(
+			"SELECT status, COUNT(*) as count FROM tasks WHERE project_id = ? GROUP BY status",
+			id,
+		) as unknown as { status: string; count: number }[];
 		const task_summary: Record<string, number> = {};
 		for (const row of counts) task_summary[row.status] = row.count;
 		return { ...project, task_summary };
 	}
 
 	listProjects(filters: Record<string, unknown>): Project[] {
-		this.ensureSchema();
 		const { where, params } = buildWhere(filters, ["status", "owner", "customer"]);
-		return [
-			...this.ctx.storage.sql.exec<SqlRow>(
-				`SELECT * FROM projects ${where} ORDER BY created_at DESC`,
-				...params,
-			),
-		] as unknown as Project[];
+		return this.q(
+			`SELECT * FROM projects ${where} ORDER BY created_at DESC`,
+			...params,
+		) as unknown as Project[];
 	}
 
 	updateProject(id: string, updates: Record<string, unknown>): Project | null {
@@ -253,42 +236,59 @@ export class TaskStore extends DurableObject<Env> {
 		return row;
 	}
 
+	getActivitySinceLastObservation(): unknown[] {
+		const lastObs = this.q("SELECT created_at FROM observations ORDER BY created_at DESC LIMIT 1");
+		const since = (lastObs[0] as { created_at: string } | undefined)?.created_at;
+		if (since)
+			return this.q("SELECT * FROM activity_log WHERE created_at > ? ORDER BY created_at", since);
+		return this.q("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 50");
+	}
+
+	storeObservation(
+		content: string,
+		type: "observation" | "reflection",
+		sourceIds?: string[],
+	): unknown {
+		const id = ulid();
+		const now = new Date().toISOString();
+		this.q(
+			"INSERT INTO observations (id,content,type,source_ids,created_at) VALUES (?,?,?,?,?)",
+			id,
+			content,
+			type,
+			sourceIds ? JSON.stringify(sourceIds) : null,
+			now,
+		);
+		return { id, content, type, source_ids: sourceIds ?? null, created_at: now };
+	}
+
+	getRecentObservations(limit = 10): unknown[] {
+		return this.q(
+			"SELECT * FROM observations WHERE type = 'observation' ORDER BY created_at DESC LIMIT ?",
+			limit,
+		);
+	}
+
+	getObservationCount(): number {
+		return (
+			(
+				this.q("SELECT COUNT(*) as count FROM observations WHERE type = 'observation'")[0] as
+					| { count: number }
+					| undefined
+			)?.count ?? 0
+		);
+	}
+
 	executeQuery(sql: string): unknown[] {
-		this.ensureSchema();
-		if (!sql.trim().toUpperCase().startsWith("SELECT")) {
+		if (!sql.trim().toUpperCase().startsWith("SELECT"))
 			throw new Error("Only SELECT queries are allowed");
-		}
-		return [...this.ctx.storage.sql.exec(sql)];
+		return this.q(sql);
 	}
 
 	getContext(): { observations: unknown[]; recent_activity: unknown[] } {
-		this.ensureSchema();
 		return {
-			observations: [
-				...this.ctx.storage.sql.exec(
-					"SELECT * FROM observations ORDER BY created_at DESC LIMIT 10",
-				),
-			],
-			recent_activity: [
-				...this.ctx.storage.sql.exec(
-					"SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 20",
-				),
-			],
+			observations: this.q("SELECT * FROM observations ORDER BY created_at DESC LIMIT 10"),
+			recent_activity: this.q("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 20"),
 		};
 	}
-}
-
-function buildWhere(
-	filters: Record<string, unknown>,
-	keys: string[],
-): { where: string; params: unknown[] } {
-	const conditions: string[] = [];
-	const params: unknown[] = [];
-	for (const key of keys) {
-		if (filters[key]) {
-			conditions.push(`${key} = ?`);
-			params.push(filters[key]);
-		}
-	}
-	return { where: conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "", params };
 }
