@@ -83,4 +83,3 @@ export const PROJECT_STATUSES: readonly ProjectStatus[] = [
 	"done",
 	"canceled",
 ] as const;
-

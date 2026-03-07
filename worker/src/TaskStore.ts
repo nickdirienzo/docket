@@ -3,12 +3,7 @@ import { SCHEMA } from "./schema";
 import type { ActivityLogEntry, Env, Project, Task } from "./types";
 import { PROJECT_STATUSES, TASK_PRIORITIES, TASK_STATUSES } from "./types";
 import { ulid } from "./ulid";
-import {
-	asStringOrNull,
-	buildWhere,
-	validatedEnum,
-	validatedEnumOrNull,
-} from "./validate";
+import { asStringOrNull, buildWhere, validatedEnum, validatedEnumOrNull } from "./validate";
 
 type SqlRow = Record<string, SqlStorageValue>;
 
