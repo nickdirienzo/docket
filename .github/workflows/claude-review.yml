@@ -1,0 +1,87 @@
+name: Claude Review
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    if: github.event.pull_request.user.login != 'claude[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install and build MCP server
+        run: npm ci && npm run build --workspace=mcp-server
+      - name: Create MCP config
+        env:
+          DOCKET_WORKER_URL: ${{ secrets.DOCKET_WORKER_URL }}
+          DOCKET_API_TOKEN: ${{ secrets.DOCKET_API_TOKEN }}
+        run: |
+          cat > .mcp.json <<EOF
+          {
+            "mcpServers": {
+              "docket": {
+                "command": "node",
+                "args": ["${GITHUB_WORKSPACE}/mcp-server/dist/index.js"],
+                "env": {
+                  "DOCKET_WORKER_URL": "${DOCKET_WORKER_URL}",
+                  "DOCKET_API_TOKEN": "${DOCKET_API_TOKEN}"
+                }
+              }
+            }
+          }
+          EOF
+      - uses: anthropics/claude-code-action@v1
+        id: review
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          trigger_phrase: ""
+          claude_args: '--allowedTools "Bash,Read,mcp__docket__query,mcp__docket__get_task,mcp__docket__list_tasks,mcp__docket__get_context,mcp__docket__get_project,mcp__docket__list_projects"'
+          prompt: |
+            Review PR #${{ github.event.pull_request.number }} thoroughly.
+
+            Look at the diff, understand the intent, and check for:
+            - Bugs, logic errors, or edge cases
+            - Security issues
+            - Consistency with codebase conventions (see AGENTS.md and docs/)
+            - Missing tests or docs where appropriate
+
+            Use Docket context to understand if this work aligns with project priorities.
+
+            Submit a GitHub review using `gh pr review`:
+            - If the code looks good: `gh pr review ${{ github.event.pull_request.number }} --approve -b "your summary"`
+            - If there are issues: `gh pr review ${{ github.event.pull_request.number }} --request-changes -b "your feedback"`
+
+            Be specific about what you reviewed. Do not leave generic comments.
+
+            IMPORTANT: After submitting your review, if you requested changes, output exactly:
+            REVIEW_RESULT=changes_requested
+            If you approved, output exactly:
+            REVIEW_RESULT=approved
+      - name: Check if changes were requested
+        id: check
+        run: |
+          LATEST_REVIEW=$(gh pr reviews ${{ github.event.pull_request.number }} --json author,state --jq '[.[] | select(.author.login == "github-actions[bot]")] | last | .state')
+          echo "state=$LATEST_REVIEW" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Dispatch revise workflow
+        if: steps.check.outputs.state == 'CHANGES_REQUESTED'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REVIEW_URL=$(gh pr reviews ${{ github.event.pull_request.number }} --json author,url --jq '[.[] | select(.author.login == "github-actions[bot]")] | last | .url')
+          gh workflow run claude-pr.yml \
+            -f pr_number=${{ github.event.pull_request.number }} \
+            -f pr_branch=${{ github.event.pull_request.head.ref }} \
+            -f review_url="$REVIEW_URL"

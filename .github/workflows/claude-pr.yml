@@ -2,10 +2,23 @@ name: Claude PR Review
 on:
   pull_request_review:
     types: [submitted]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR number to revise
+        required: true
+      pr_branch:
+        description: PR head branch
+        required: true
+      review_url:
+        description: URL of the review requesting changes
+        required: true
 
 jobs:
   revise:
-    if: github.event.review.state == 'changes_requested'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.review.state == 'changes_requested'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -14,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ inputs.pr_branch || github.event.pull_request.head.ref }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -47,9 +60,10 @@ jobs:
           claude_args: '--allowedTools "Bash,Edit,Write,Read,mcp__docket__query,mcp__docket__create_task,mcp__docket__update_task,mcp__docket__get_task,mcp__docket__list_tasks,mcp__docket__get_context,mcp__docket__create_project,mcp__docket__update_project,mcp__docket__get_project,mcp__docket__list_projects"'
           prompt: |
             A reviewer has requested changes on this PR.
-            Review feedback: ${{ github.event.review.html_url }}
+            Review feedback: ${{ inputs.review_url || github.event.review.html_url }}
             Please address all the feedback, push your changes, and leave a comment summarizing what you changed.
       - name: Re-request review
+        if: github.event_name == 'pull_request_review'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh pr edit ${{ github.event.pull_request.number }} --add-reviewer ${{ github.event.review.user.login }}
