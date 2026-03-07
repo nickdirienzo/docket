@@ -8,7 +8,6 @@ import {
 	buildWhere,
 	validatedEnum,
 	validatedEnumOrNull,
-	validatedEstimate,
 } from "./validate";
 
 type SqlRow = Record<string, SqlStorageValue>;
@@ -46,7 +45,6 @@ export class TaskStore extends DurableObject<Env> {
 			priority: validatedEnumOrNull(input.priority, TASK_PRIORITIES),
 			assignee: asStringOrNull(input.assignee),
 			tags: input.tags ? JSON.stringify(input.tags) : null,
-			estimate: validatedEstimate(input.estimate),
 			project_id: asStringOrNull(input.project_id),
 			parent_task_id: asStringOrNull(input.parent_task_id),
 			customer: asStringOrNull(input.customer),
@@ -56,8 +54,8 @@ export class TaskStore extends DurableObject<Env> {
 			updated_at: now,
 		};
 		this.ctx.storage.sql.exec(
-			`INSERT INTO tasks (id,title,summary,description,status,priority,assignee,tags,estimate,project_id,parent_task_id,customer,pr_url,due_date,created_at,updated_at)
-			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			`INSERT INTO tasks (id,title,summary,description,status,priority,assignee,tags,project_id,parent_task_id,customer,pr_url,due_date,created_at,updated_at)
+			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			task.id,
 			task.title,
 			task.summary,
@@ -66,7 +64,6 @@ export class TaskStore extends DurableObject<Env> {
 			task.priority,
 			task.assignee,
 			task.tags,
-			task.estimate,
 			task.project_id,
 			task.parent_task_id,
 			task.customer,
@@ -117,7 +114,6 @@ export class TaskStore extends DurableObject<Env> {
 			"priority",
 			"assignee",
 			"tags",
-			"estimate",
 			"project_id",
 			"parent_task_id",
 			"customer",
@@ -132,7 +128,6 @@ export class TaskStore extends DurableObject<Env> {
 			if (key === "tags" && Array.isArray(value)) value = JSON.stringify(value);
 			if (key === "status") validatedEnum(value, TASK_STATUSES, "not_started");
 			if (key === "priority" && value != null) validatedEnumOrNull(value, TASK_PRIORITIES);
-			if (key === "estimate" && value != null) validatedEstimate(value);
 			setClauses.push(`${key} = ?`);
 			params.push(value ?? null);
 		}

@@ -5,7 +5,7 @@
 ### create_task
 Create a new task.
 - **Required**: title
-- **Optional**: summary, description, status, priority, assignee, tags, estimate, project_id, parent_task_id, customer, due_date
+- **Optional**: summary, description, status, priority, assignee, tags, project_id, parent_task_id, customer, due_date
 - **Returns**: the created task
 
 ### update_task
