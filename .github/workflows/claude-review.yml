@@ -66,33 +66,40 @@ jobs:
 
             Use Docket context to understand if this work aligns with project priorities.
 
-            Submit a GitHub review using `gh pr review`:
-            - If the code looks good: `gh pr review ${{ inputs.pr_number || github.event.pull_request.number }} --approve -b "your summary"`
-            - If there are issues: `gh pr review ${{ inputs.pr_number || github.event.pull_request.number }} --request-changes -b "your feedback"`
-
+            Leave a comment on the PR with your detailed review using `gh pr comment`.
             Be specific about what you reviewed. Do not leave generic comments.
-
-            IMPORTANT: After submitting your review, if you requested changes, output exactly:
-            REVIEW_RESULT=changes_requested
-            If you approved, output exactly:
-            REVIEW_RESULT=approved
-      - name: Check if changes were requested
-        id: check
+      - name: Classify review result
+        id: classify
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
         run: |
-          LATEST=$(gh api repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews --jq '[.[] | select(.user.login == "github-actions[bot]")] | last | .state')
-          echo "state=$LATEST" >> "$GITHUB_OUTPUT"
+          COMMENT=$(gh api repos/${{ github.repository }}/issues/${PR_NUMBER}/comments \
+            --jq '[.[] | select(.user.login == "claude[bot]")] | last | .body')
+          RESULT=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "$(jq -n --arg comment "$COMMENT" '{
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 10,
+              messages: [{
+                role: "user",
+                content: ("Does this code review approve the PR or request changes? Reply with exactly one word: approved or changes_requested\n\n" + $comment)
+              }]
+            }')" | jq -r '.content[0].text')
+          echo "result=$RESULT" >> "$GITHUB_OUTPUT"
       - name: Dispatch revise workflow
-        if: steps.check.outputs.state == 'CHANGES_REQUESTED'
+        if: steps.classify.outputs.result == 'changes_requested'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
           PR_BRANCH: ${{ inputs.pr_branch || github.event.pull_request.head.ref }}
         run: |
-          REVIEW_URL=$(gh api repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews --jq '[.[] | select(.user.login == "github-actions[bot]")] | last | .html_url')
+          COMMENT_URL=$(gh api repos/${{ github.repository }}/issues/${PR_NUMBER}/comments \
+            --jq '[.[] | select(.user.login == "claude[bot]")] | last | .html_url')
           gh workflow run claude-pr.yml \
             -f pr_number="${PR_NUMBER}" \
             -f pr_branch="${PR_BRANCH}" \
-            -f review_url="${REVIEW_URL}"
+            -f review_url="${COMMENT_URL}"
