@@ -16,7 +16,6 @@ export interface Task {
 	priority: "backlog" | "low" | "medium" | "high" | "urgent" | null;
 	assignee: string | null;
 	tags: string | null; // JSON array
-	estimate: number | null;
 	project_id: string | null;
 	parent_task_id: string | null;
 	customer: string | null;
@@ -84,5 +83,3 @@ export const PROJECT_STATUSES: readonly ProjectStatus[] = [
 	"done",
 	"canceled",
 ] as const;
-
-export const VALID_ESTIMATES = [1, 2, 3, 5, 8] as const;
