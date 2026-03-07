@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { SCHEMA } from "./schema";
 import type { ActivityLogEntry, Env, Project, Task } from "./types";
 import { PROJECT_STATUSES, TASK_PRIORITIES, TASK_STATUSES } from "./types";
 import { ulid } from "./ulid";
@@ -12,20 +13,15 @@ import {
 
 type SqlRow = Record<string, SqlStorageValue>;
 
-/* eslint-disable -- schema is intentionally compact */
-const SCHEMA = [
-	"CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT, status TEXT NOT NULL DEFAULT 'not_started', priority TEXT, assignee TEXT, tags TEXT, estimate INTEGER, project_id TEXT, parent_task_id TEXT, customer TEXT, pr_url TEXT, due_date TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
-	"CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, status TEXT NOT NULL DEFAULT 'backlog', priority TEXT, owner TEXT, customer TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
-	"CREATE TABLE IF NOT EXISTS activity_log (id TEXT PRIMARY KEY, tool_name TEXT NOT NULL, input TEXT NOT NULL, output TEXT, agent_id TEXT, created_at TEXT NOT NULL)",
-	"CREATE TABLE IF NOT EXISTS observations (id TEXT PRIMARY KEY, content TEXT NOT NULL, type TEXT NOT NULL, source_ids TEXT, created_at TEXT NOT NULL)",
-].join(";");
-
 export class TaskStore extends DurableObject<Env> {
 	private initialized = false;
 
 	private ensureSchema(): void {
 		if (this.initialized) return;
 		this.ctx.storage.sql.exec(SCHEMA);
+		try {
+			this.ctx.storage.sql.exec("ALTER TABLE tasks ADD COLUMN summary TEXT");
+		} catch {}
 		this.initialized = true;
 	}
 
@@ -44,6 +40,7 @@ export class TaskStore extends DurableObject<Env> {
 		const task: Task = {
 			id: ulid(),
 			title: title.trim(),
+			summary: asStringOrNull(input.summary),
 			description: asStringOrNull(input.description),
 			status: validatedEnum(input.status, TASK_STATUSES, "not_started"),
 			priority: validatedEnumOrNull(input.priority, TASK_PRIORITIES),
@@ -59,10 +56,11 @@ export class TaskStore extends DurableObject<Env> {
 			updated_at: now,
 		};
 		this.ctx.storage.sql.exec(
-			`INSERT INTO tasks (id,title,description,status,priority,assignee,tags,estimate,project_id,parent_task_id,customer,pr_url,due_date,created_at,updated_at)
-			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			`INSERT INTO tasks (id,title,summary,description,status,priority,assignee,tags,estimate,project_id,parent_task_id,customer,pr_url,due_date,created_at,updated_at)
+			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			task.id,
 			task.title,
+			task.summary,
 			task.description,
 			task.status,
 			task.priority,
@@ -92,10 +90,20 @@ export class TaskStore extends DurableObject<Env> {
 
 	listTasks(filters: Record<string, unknown>): Task[] {
 		const { where, params } = buildWhere(filters, ["status", "assignee", "project_id", "customer"]);
-		return this.q(
-			`SELECT * FROM tasks ${where} ORDER BY created_at DESC`,
-			...params,
-		) as unknown as Task[];
+		const allParams = [...params];
+		let sql = `SELECT * FROM tasks ${where}`;
+		const tagFilter = filters.tags;
+		const tags: string[] = Array.isArray(tagFilter)
+			? tagFilter.filter((t): t is string => typeof t === "string")
+			: typeof tagFilter === "string"
+				? [tagFilter]
+				: [];
+		if (tags.length > 0) {
+			sql += `${where ? " AND" : " WHERE"} EXISTS (SELECT 1 FROM json_each(tags) WHERE value IN (${tags.map(() => "?").join(",")}))`;
+			allParams.push(...tags);
+		}
+		sql += " ORDER BY created_at DESC";
+		return this.q(sql, ...allParams) as unknown as Task[];
 	}
 
 	updateTask(id: string, updates: Record<string, unknown>): Task | null {
@@ -103,6 +111,7 @@ export class TaskStore extends DurableObject<Env> {
 		if (!this.getTask(id)) return null;
 		const allowed = [
 			"title",
+			"summary",
 			"description",
 			"status",
 			"priority",
@@ -239,9 +248,9 @@ export class TaskStore extends DurableObject<Env> {
 	getActivitySinceLastObservation(): unknown[] {
 		const lastObs = this.q("SELECT created_at FROM observations ORDER BY created_at DESC LIMIT 1");
 		const since = (lastObs[0] as { created_at: string } | undefined)?.created_at;
-		if (since)
-			return this.q("SELECT * FROM activity_log WHERE created_at > ? ORDER BY created_at", since);
-		return this.q("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 50");
+		return since
+			? this.q("SELECT * FROM activity_log WHERE created_at > ? ORDER BY created_at", since)
+			: this.q("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 50");
 	}
 
 	storeObservation(
@@ -263,20 +272,16 @@ export class TaskStore extends DurableObject<Env> {
 	}
 
 	getRecentObservations(limit = 10): unknown[] {
-		return this.q(
-			"SELECT * FROM observations WHERE type = 'observation' ORDER BY created_at DESC LIMIT ?",
-			limit,
-		);
+		const sql =
+			"SELECT * FROM observations WHERE type = 'observation' ORDER BY created_at DESC LIMIT ?";
+		return this.q(sql, limit);
 	}
 
 	getObservationCount(): number {
-		return (
-			(
-				this.q("SELECT COUNT(*) as count FROM observations WHERE type = 'observation'")[0] as
-					| { count: number }
-					| undefined
-			)?.count ?? 0
-		);
+		const row = this.q(
+			"SELECT COUNT(*) as count FROM observations WHERE type = 'observation'",
+		)[0] as { count: number } | undefined;
+		return row?.count ?? 0;
 	}
 
 	executeQuery(sql: string): unknown[] {

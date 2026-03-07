@@ -10,6 +10,7 @@ export interface Env {
 export interface Task {
 	id: string;
 	title: string;
+	summary: string | null;
 	description: string | null;
 	status: "not_started" | "in_progress" | "done" | "archived";
 	priority: "backlog" | "low" | "medium" | "high" | "urgent" | null;

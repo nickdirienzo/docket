@@ -37,6 +37,7 @@ app.get("/tasks", async (c) => {
 		assignee: c.req.query("assignee"),
 		project_id: c.req.query("project_id"),
 		customer: c.req.query("customer"),
+		tags: c.req.queries("tag"),
 	};
 	const store = getStore(c.env);
 	const tasks = await store.listTasks(filters);
@@ -143,7 +144,7 @@ async function runObserver(env: Env): Promise<{ observation: unknown; reflection
 	if (count > 0 && count % 10 === 0) {
 		const recent = await store.getRecentObservations(10);
 		const { generateReflection } = await import("./observer");
-		const reflectionContent = await generateReflection(recent as never);
+		const reflectionContent = await generateReflection(recent, env.ANTHROPIC_API_KEY ?? "");
 		reflection = await store.storeObservation(reflectionContent, "reflection");
 	}
 
