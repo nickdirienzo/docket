@@ -66,7 +66,7 @@ server.tool(
 			.describe("Task priority"),
 		assignee: z.string().optional().describe("Assignee name"),
 		tags: z.array(z.string()).optional().describe("Tags"),
-		estimate: z.number().optional().describe("Story points (1, 2, 3, 5, 8)"),
+
 		project_id: z.string().optional().describe("Project ID"),
 		parent_task_id: z.string().optional().describe("Parent task ID for sub-tasks"),
 		customer: z.string().optional().describe("Customer name"),
@@ -90,7 +90,7 @@ server.tool(
 		priority: z.enum(["backlog", "low", "medium", "high", "urgent"]).optional(),
 		assignee: z.string().optional(),
 		tags: z.array(z.string()).optional(),
-		estimate: z.number().optional(),
+
 		project_id: z.string().optional(),
 		parent_task_id: z.string().optional(),
 		customer: z.string().optional(),

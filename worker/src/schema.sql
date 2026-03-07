@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   priority TEXT,
   assignee TEXT,
   tags TEXT,
-  estimate INTEGER,
+
   project_id TEXT REFERENCES projects(id),
   parent_task_id TEXT REFERENCES tasks(id),
   customer TEXT,

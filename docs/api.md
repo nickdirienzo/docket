@@ -20,7 +20,7 @@ Base URL: configured per environment. Auth: `Authorization: Bearer <token>`.
   "priority": "backlog | low | medium | high | urgent",
   "assignee": "string",
   "tags": ["string"],
-  "estimate": 1 | 2 | 3 | 5 | 8,
+
   "project_id": "ulid",
   "parent_task_id": "ulid",
   "customer": "string",

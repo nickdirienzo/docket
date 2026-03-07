@@ -2,19 +2,13 @@ import { DurableObject } from "cloudflare:workers";
 import type { ActivityLogEntry, Env, Project, Task } from "./types";
 import { PROJECT_STATUSES, TASK_PRIORITIES, TASK_STATUSES } from "./types";
 import { ulid } from "./ulid";
-import {
-	asStringOrNull,
-	buildWhere,
-	validatedEnum,
-	validatedEnumOrNull,
-	validatedEstimate,
-} from "./validate";
+import { asStringOrNull, buildWhere, validatedEnum, validatedEnumOrNull } from "./validate";
 
 type SqlRow = Record<string, SqlStorageValue>;
 
 /* eslint-disable -- schema is intentionally compact */
 const SCHEMA = [
-	"CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT, status TEXT NOT NULL DEFAULT 'not_started', priority TEXT, assignee TEXT, tags TEXT, estimate INTEGER, project_id TEXT, parent_task_id TEXT, customer TEXT, pr_url TEXT, due_date TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+	"CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT, status TEXT NOT NULL DEFAULT 'not_started', priority TEXT, assignee TEXT, tags TEXT, project_id TEXT, parent_task_id TEXT, customer TEXT, pr_url TEXT, due_date TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
 	"CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, status TEXT NOT NULL DEFAULT 'backlog', priority TEXT, owner TEXT, customer TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
 	"CREATE TABLE IF NOT EXISTS activity_log (id TEXT PRIMARY KEY, tool_name TEXT NOT NULL, input TEXT NOT NULL, output TEXT, agent_id TEXT, created_at TEXT NOT NULL)",
 	"CREATE TABLE IF NOT EXISTS observations (id TEXT PRIMARY KEY, content TEXT NOT NULL, type TEXT NOT NULL, source_ids TEXT, created_at TEXT NOT NULL)",
@@ -49,7 +43,7 @@ export class TaskStore extends DurableObject<Env> {
 			priority: validatedEnumOrNull(input.priority, TASK_PRIORITIES),
 			assignee: asStringOrNull(input.assignee),
 			tags: input.tags ? JSON.stringify(input.tags) : null,
-			estimate: validatedEstimate(input.estimate),
+
 			project_id: asStringOrNull(input.project_id),
 			parent_task_id: asStringOrNull(input.parent_task_id),
 			customer: asStringOrNull(input.customer),
@@ -59,8 +53,8 @@ export class TaskStore extends DurableObject<Env> {
 			updated_at: now,
 		};
 		this.ctx.storage.sql.exec(
-			`INSERT INTO tasks (id,title,description,status,priority,assignee,tags,estimate,project_id,parent_task_id,customer,pr_url,due_date,created_at,updated_at)
-			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			`INSERT INTO tasks (id,title,description,status,priority,assignee,tags,project_id,parent_task_id,customer,pr_url,due_date,created_at,updated_at)
+			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			task.id,
 			task.title,
 			task.description,
@@ -68,7 +62,6 @@ export class TaskStore extends DurableObject<Env> {
 			task.priority,
 			task.assignee,
 			task.tags,
-			task.estimate,
 			task.project_id,
 			task.parent_task_id,
 			task.customer,
@@ -108,7 +101,7 @@ export class TaskStore extends DurableObject<Env> {
 			"priority",
 			"assignee",
 			"tags",
-			"estimate",
+
 			"project_id",
 			"parent_task_id",
 			"customer",
@@ -123,7 +116,7 @@ export class TaskStore extends DurableObject<Env> {
 			if (key === "tags" && Array.isArray(value)) value = JSON.stringify(value);
 			if (key === "status") validatedEnum(value, TASK_STATUSES, "not_started");
 			if (key === "priority" && value != null) validatedEnumOrNull(value, TASK_PRIORITIES);
-			if (key === "estimate" && value != null) validatedEstimate(value);
+
 			setClauses.push(`${key} = ?`);
 			params.push(value ?? null);
 		}
