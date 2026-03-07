@@ -47,10 +47,14 @@ jobs:
           prompt: |
             You have access to Docket via MCP.
 
-            1. Query the activity_log for the past week
-            2. Read past observations so you don't repeat yourself
-            3. Look for patterns: repeated multi-step sequences,
+            1. Check Docket for open tasks (not_started) — these are work items
+               that humans have identified. Pick up any that you can address
+               with code changes to this repo.
+            2. Query the activity_log for the past week
+            3. Read past observations so you don't repeat yourself
+            4. Look for patterns: repeated multi-step sequences,
                missing fields, common queries, friction points
-            4. Decide what to improve (conventions, tools, schema, code)
-            5. Make the changes and open a PR, add nickdirienzo as a reviewer
-            6. Store an observation in Docket summarizing what you did and why
+            5. Decide what to improve (conventions, tools, schema, code)
+            6. Make the changes and open a PR, add nickdirienzo as a reviewer
+            7. Update any Docket tasks you addressed (set status, link PR)
+            8. Store an observation in Docket summarizing what you did and why
