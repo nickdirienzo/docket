@@ -1,0 +1,16 @@
+{
+	"name": "@docket/slack-app",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"start": "node dist/index.js",
+		"build": "tsc",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@slack/bolt": "^3.21.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.0.0"
+	}
+}
