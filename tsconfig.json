@@ -12,6 +12,6 @@
 		"noUncheckedIndexedAccess": true,
 		"noEmit": true
 	},
-	"references": [{ "path": "./worker" }, { "path": "./mcp-server" }],
+	"references": [{ "path": "./worker" }, { "path": "./mcp-server" }, { "path": "./slack-app" }],
 	"files": []
 }

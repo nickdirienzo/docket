@@ -18,7 +18,7 @@ function collectTsFiles(dir: string): string[] {
 
 describe("architecture constraints", () => {
 	it("no source file exceeds 300 lines", () => {
-		const dirs = ["worker/src", "mcp-server/src"];
+		const dirs = ["worker/src", "mcp-server/src", "slack-app/src"];
 		const violations: string[] = [];
 
 		for (const dir of dirs) {
@@ -34,7 +34,7 @@ describe("architecture constraints", () => {
 	});
 
 	it("no default exports in source files (except worker/src/index.ts)", () => {
-		const dirs = ["worker/src", "mcp-server/src"];
+		const dirs = ["worker/src", "mcp-server/src", "slack-app/src"];
 		const violations: string[] = [];
 
 		for (const dir of dirs) {
@@ -53,7 +53,7 @@ describe("architecture constraints", () => {
 	});
 
 	it("no 'any' type in source files", () => {
-		const dirs = ["worker/src", "mcp-server/src"];
+		const dirs = ["worker/src", "mcp-server/src", "slack-app/src"];
 		const violations: string[] = [];
 
 		for (const dir of dirs) {
