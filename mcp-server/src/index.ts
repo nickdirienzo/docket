@@ -26,6 +26,19 @@ async function api(method: string, path: string, body?: unknown): Promise<unknow
 	return data;
 }
 
+const MAX_LOG_OUTPUT_BYTES = 2000;
+
+function truncateForLog(output: unknown): unknown {
+	if (Array.isArray(output) && output.length > 5) {
+		return { _truncated: true, _count: output.length, _preview: output.slice(0, 3) };
+	}
+	const str = JSON.stringify(output);
+	if (str.length > MAX_LOG_OUTPUT_BYTES) {
+		return { _truncated: true, _preview: str.slice(0, MAX_LOG_OUTPUT_BYTES) };
+	}
+	return output;
+}
+
 async function apiWithActivity(
 	toolName: string,
 	input: unknown,
@@ -33,11 +46,11 @@ async function apiWithActivity(
 	agentId?: string,
 ): Promise<unknown> {
 	const output = await fn();
-	// Fire and forget activity logging
+	// Fire and forget activity logging — truncate large outputs to prevent log bloat
 	api("POST", "/activity", {
 		tool_name: toolName,
 		input,
-		output,
+		output: truncateForLog(output),
 		agent_id: agentId,
 	}).catch(() => {});
 	return output;
