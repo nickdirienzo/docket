@@ -252,7 +252,10 @@ export class TaskStore extends DurableObject<Env> {
 		const lastObs = this.q("SELECT created_at FROM observations ORDER BY created_at DESC LIMIT 1");
 		const since = (lastObs[0] as { created_at: string } | undefined)?.created_at;
 		return since
-			? this.q(`SELECT ${cols} FROM activity_log WHERE created_at > ? ORDER BY created_at LIMIT 100`, since)
+			? this.q(
+					`SELECT ${cols} FROM activity_log WHERE created_at > ? ORDER BY created_at LIMIT 100`,
+					since,
+				)
 			: this.q(`SELECT ${cols} FROM activity_log ORDER BY created_at DESC LIMIT 50`);
 	}
 
@@ -275,11 +278,16 @@ export class TaskStore extends DurableObject<Env> {
 	}
 
 	getRecentObservations(limit = 10): unknown[] {
-		return this.q("SELECT * FROM observations WHERE type = 'observation' ORDER BY created_at DESC LIMIT ?", limit);
+		return this.q(
+			"SELECT * FROM observations WHERE type = 'observation' ORDER BY created_at DESC LIMIT ?",
+			limit,
+		);
 	}
 
 	getObservationCount(): number {
-		const row = this.q("SELECT COUNT(*) as count FROM observations WHERE type = 'observation'")[0] as { count: number } | undefined;
+		const row = this.q(
+			"SELECT COUNT(*) as count FROM observations WHERE type = 'observation'",
+		)[0] as { count: number } | undefined;
 		return row?.count ?? 0;
 	}
 
@@ -292,7 +300,9 @@ export class TaskStore extends DurableObject<Env> {
 	getContext(): { observations: unknown[]; recent_activity: unknown[] } {
 		return {
 			observations: this.q("SELECT * FROM observations ORDER BY created_at DESC LIMIT 10"),
-			recent_activity: this.q("SELECT id, tool_name, input, agent_id, created_at FROM activity_log ORDER BY created_at DESC LIMIT 20"),
+			recent_activity: this.q(
+				"SELECT id, tool_name, input, agent_id, created_at FROM activity_log ORDER BY created_at DESC LIMIT 20",
+			),
 		};
 	}
 }
