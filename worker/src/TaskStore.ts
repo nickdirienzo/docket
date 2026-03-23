@@ -225,11 +225,13 @@ export class TaskStore extends DurableObject<Env> {
 		agent_id?: string;
 	}): ActivityLogEntry {
 		this.ensureSchema();
+		const raw = entry.output ? JSON.stringify(entry.output) : null;
+		const output = raw && raw.length > 2000 ? `${raw.slice(0, 2000)}… [truncated]` : raw;
 		const row: ActivityLogEntry = {
 			id: ulid(),
 			tool_name: entry.tool_name,
 			input: JSON.stringify(entry.input),
-			output: entry.output ? JSON.stringify(entry.output) : null,
+			output,
 			agent_id: entry.agent_id ?? null,
 			created_at: new Date().toISOString(),
 		};
@@ -246,11 +248,12 @@ export class TaskStore extends DurableObject<Env> {
 	}
 
 	getActivitySinceLastObservation(): unknown[] {
+		const cols = "id, tool_name, input, agent_id, created_at";
 		const lastObs = this.q("SELECT created_at FROM observations ORDER BY created_at DESC LIMIT 1");
 		const since = (lastObs[0] as { created_at: string } | undefined)?.created_at;
 		return since
-			? this.q("SELECT * FROM activity_log WHERE created_at > ? ORDER BY created_at", since)
-			: this.q("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 50");
+			? this.q(`SELECT ${cols} FROM activity_log WHERE created_at > ? ORDER BY created_at LIMIT 100`, since)
+			: this.q(`SELECT ${cols} FROM activity_log ORDER BY created_at DESC LIMIT 50`);
 	}
 
 	storeObservation(
@@ -272,15 +275,11 @@ export class TaskStore extends DurableObject<Env> {
 	}
 
 	getRecentObservations(limit = 10): unknown[] {
-		const sql =
-			"SELECT * FROM observations WHERE type = 'observation' ORDER BY created_at DESC LIMIT ?";
-		return this.q(sql, limit);
+		return this.q("SELECT * FROM observations WHERE type = 'observation' ORDER BY created_at DESC LIMIT ?", limit);
 	}
 
 	getObservationCount(): number {
-		const row = this.q(
-			"SELECT COUNT(*) as count FROM observations WHERE type = 'observation'",
-		)[0] as { count: number } | undefined;
+		const row = this.q("SELECT COUNT(*) as count FROM observations WHERE type = 'observation'")[0] as { count: number } | undefined;
 		return row?.count ?? 0;
 	}
 
@@ -293,7 +292,7 @@ export class TaskStore extends DurableObject<Env> {
 	getContext(): { observations: unknown[]; recent_activity: unknown[] } {
 		return {
 			observations: this.q("SELECT * FROM observations ORDER BY created_at DESC LIMIT 10"),
-			recent_activity: this.q("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 20"),
+			recent_activity: this.q("SELECT id, tool_name, input, agent_id, created_at FROM activity_log ORDER BY created_at DESC LIMIT 20"),
 		};
 	}
 }
