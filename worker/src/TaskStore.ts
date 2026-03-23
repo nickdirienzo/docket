@@ -13,6 +13,11 @@ import {
 
 type SqlRow = Record<string, SqlStorageValue>;
 
+const TASK_CORE_FIELDS = ["title", "summary", "description", "status", "priority", "assignee"];
+const TASK_EXTRA_FIELDS = ["tags", "estimate"];
+const TASK_ID_FIELDS = ["project_id", "parent_task_id", "customer", "pr_url", "due_date"];
+const TASK_UPDATE_FIELDS = [...TASK_CORE_FIELDS, ...TASK_EXTRA_FIELDS, ...TASK_ID_FIELDS];
+
 export class TaskStore extends DurableObject<Env> {
 	private initialized = false;
 
@@ -109,24 +114,9 @@ export class TaskStore extends DurableObject<Env> {
 	updateTask(id: string, updates: Record<string, unknown>): Task | null {
 		this.ensureSchema();
 		if (!this.getTask(id)) return null;
-		const allowed = [
-			"title",
-			"summary",
-			"description",
-			"status",
-			"priority",
-			"assignee",
-			"tags",
-			"estimate",
-			"project_id",
-			"parent_task_id",
-			"customer",
-			"pr_url",
-			"due_date",
-		];
 		const setClauses: string[] = [];
 		const params: unknown[] = [];
-		for (const key of allowed) {
+		for (const key of TASK_UPDATE_FIELDS) {
 			if (!(key in updates)) continue;
 			let value = updates[key];
 			if (key === "tags" && Array.isArray(value)) value = JSON.stringify(value);
