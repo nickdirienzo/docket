@@ -286,7 +286,7 @@ export class TaskStore extends DurableObject<Env> {
 
 	executeQuery(sql: string): unknown[] {
 		if (!sql.trim().toUpperCase().startsWith("SELECT"))
-			throw new Error("Only SELECT queries are allowed");
+			throw new Error("Invalid query: only SELECT statements are allowed");
 		return this.q(sql);
 	}
 
