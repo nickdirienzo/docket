@@ -100,6 +100,20 @@ describe("architecture constraints", () => {
 		}
 	});
 
+	it("schema.ts and schema.sql define the same tables", () => {
+		const sqlPath = join(ROOT, "worker/src/schema.sql");
+		const tsPath = join(ROOT, "worker/src/schema.ts");
+
+		const sqlContent = readFileSync(sqlPath, "utf-8");
+		const tsContent = readFileSync(tsPath, "utf-8");
+
+		const tablePattern = /CREATE TABLE IF NOT EXISTS (\w+)/g;
+		const sqlTables = [...sqlContent.matchAll(tablePattern)].map((m) => m[1]).sort();
+		const tsTables = [...tsContent.matchAll(tablePattern)].map((m) => m[1]).sort();
+
+		expect(tsTables).toEqual(sqlTables);
+	});
+
 	it("activity_log and observations have no DELETE or UPDATE in worker source", () => {
 		const violations: string[] = [];
 		for (const file of collectTsFiles(join(ROOT, "worker/src"))) {

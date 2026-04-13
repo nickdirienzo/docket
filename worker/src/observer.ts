@@ -7,6 +7,15 @@ Analyze recent task activity and produce concise observations about:
 
 Output 2-5 bullet points. Be specific and actionable. Reference task/project IDs when relevant.`;
 
+const REFLECTION_PROMPT = `You are a meta-observer for Docket. Given a set of recent observations, produce a high-level reflection that synthesizes them.
+Focus on:
+- Sustained trends (not one-off events)
+- Recurring blockers or friction points
+- Overall progress trajectory across projects/phases
+- 1-2 concrete recommendations for what to tackle next
+
+Output 3-5 bullet points. Be strategic and concise. Avoid repeating specific task IDs unless critical.`;
+
 interface ObserveInput {
 	recentActivity: unknown[];
 	existingObservations: unknown[];
@@ -17,11 +26,52 @@ interface ClaudeMessage {
 	content: { type: string; text: string }[];
 }
 
-export async function generateObservations(input: ObserveInput): Promise<string> {
+interface SystemBlock {
+	type: "text";
+	text: string;
+	cache_control: { type: "ephemeral" };
+}
+
+function cachedSystem(text: string): SystemBlock[] {
+	return [{ type: "text", text, cache_control: { type: "ephemeral" } }];
+}
+
+async function callClaude(
+	apiKey: string,
+	system: SystemBlock[],
+	userContent: string,
+): Promise<string> {
+	const res = await fetch("https://api.anthropic.com/v1/messages", {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			"anthropic-version": "2023-06-01",
+			"anthropic-beta": "prompt-caching-2024-07-31",
+			"x-api-key": apiKey,
+		},
+		body: JSON.stringify({
+			model: "claude-haiku-4-5-20251001",
+			max_tokens: 1024,
+			system,
+			messages: [{ role: "user", content: userContent }],
+		}),
+	});
+
+	if (!res.ok) {
+		const err = await res.text();
+		throw new Error(`Claude API error ${res.status}: ${err}`);
+	}
+
+	const data = (await res.json()) as ClaudeMessage;
+	return data.content[0]?.text ?? "No content generated.";
+}
+
+// Returns null when there is no new activity to observe (skip storing).
+export async function generateObservations(input: ObserveInput): Promise<string | null> {
 	const { recentActivity, existingObservations, apiKey } = input;
 
 	if (recentActivity.length === 0) {
-		return "No new activity since last observation.";
+		return null;
 	}
 
 	const userContent = [
@@ -32,38 +82,8 @@ export async function generateObservations(input: ObserveInput): Promise<string>
 			: "",
 	].join("\n");
 
-	const res = await fetch("https://api.anthropic.com/v1/messages", {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			"anthropic-version": "2023-06-01",
-			"x-api-key": apiKey,
-		},
-		body: JSON.stringify({
-			model: "claude-haiku-4-5-20251001",
-			max_tokens: 1024,
-			system: SYSTEM_PROMPT,
-			messages: [{ role: "user", content: userContent }],
-		}),
-	});
-
-	if (!res.ok) {
-		const err = await res.text();
-		throw new Error(`Claude API error ${res.status}: ${err}`);
-	}
-
-	const data = (await res.json()) as ClaudeMessage;
-	return data.content[0]?.text ?? "No observations generated.";
+	return callClaude(apiKey, cachedSystem(SYSTEM_PROMPT), userContent);
 }
-
-const REFLECTION_PROMPT = `You are a meta-observer for Docket. Given a set of recent observations, produce a high-level reflection that synthesizes them.
-Focus on:
-- Sustained trends (not one-off events)
-- Recurring blockers or friction points
-- Overall progress trajectory across projects/phases
-- 1-2 concrete recommendations for what to tackle next
-
-Output 3-5 bullet points. Be strategic and concise. Avoid repeating specific task IDs unless critical.`;
 
 export async function generateReflection(observations: unknown[], apiKey: string): Promise<string> {
 	if (observations.length === 0) {
@@ -71,27 +91,5 @@ export async function generateReflection(observations: unknown[], apiKey: string
 	}
 
 	const userContent = `## Observations to Compress\n${JSON.stringify(observations, null, 2)}`;
-
-	const res = await fetch("https://api.anthropic.com/v1/messages", {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			"anthropic-version": "2023-06-01",
-			"x-api-key": apiKey,
-		},
-		body: JSON.stringify({
-			model: "claude-haiku-4-5-20251001",
-			max_tokens: 1024,
-			system: REFLECTION_PROMPT,
-			messages: [{ role: "user", content: userContent }],
-		}),
-	});
-
-	if (!res.ok) {
-		const err = await res.text();
-		throw new Error(`Claude API error ${res.status}: ${err}`);
-	}
-
-	const data = (await res.json()) as ClaudeMessage;
-	return data.content[0]?.text ?? "No reflection generated.";
+	return callClaude(apiKey, cachedSystem(REFLECTION_PROMPT), userContent);
 }

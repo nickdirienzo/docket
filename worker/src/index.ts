@@ -137,6 +137,11 @@ async function runObserver(env: Env): Promise<{ observation: unknown; reflection
 		apiKey: env.ANTHROPIC_API_KEY ?? "",
 	});
 
+	// No new activity — skip storing to keep observations table clean.
+	if (content === null) {
+		return { observation: null, reflection: null };
+	}
+
 	const observation = await store.storeObservation(content, "observation");
 
 	let reflection = null;
