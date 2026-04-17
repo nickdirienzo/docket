@@ -9,6 +9,7 @@ docket/
   docs/           # Source of truth: architecture, schemas, conventions
   worker/         # Cloudflare Worker + Durable Object (Hono + SQLite)
   mcp-server/     # MCP server (stdio transport, calls worker API)
+  slack-app/      # Slack bot: @docket mention handler + intake triage via Claude
   tests/          # Structural tests enforcing architecture rules
 ```
 
