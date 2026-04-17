@@ -13,6 +13,11 @@ import {
 
 type SqlRow = Record<string, SqlStorageValue>;
 
+const TASK_CORE_FIELDS = ["title", "summary", "description", "status", "priority", "assignee"];
+const TASK_EXTRA_FIELDS = ["tags", "estimate"];
+const TASK_ID_FIELDS = ["project_id", "parent_task_id", "customer", "pr_url", "due_date"];
+const TASK_UPDATE_FIELDS = [...TASK_CORE_FIELDS, ...TASK_EXTRA_FIELDS, ...TASK_ID_FIELDS];
+
 export class TaskStore extends DurableObject<Env> {
 	private initialized = false;
 
@@ -109,24 +114,9 @@ export class TaskStore extends DurableObject<Env> {
 	updateTask(id: string, updates: Record<string, unknown>): Task | null {
 		this.ensureSchema();
 		if (!this.getTask(id)) return null;
-		const allowed = [
-			"title",
-			"summary",
-			"description",
-			"status",
-			"priority",
-			"assignee",
-			"tags",
-			"estimate",
-			"project_id",
-			"parent_task_id",
-			"customer",
-			"pr_url",
-			"due_date",
-		];
 		const setClauses: string[] = [];
 		const params: unknown[] = [];
-		for (const key of allowed) {
+		for (const key of TASK_UPDATE_FIELDS) {
 			if (!(key in updates)) continue;
 			let value = updates[key];
 			if (key === "tags" && Array.isArray(value)) value = JSON.stringify(value);
@@ -225,11 +215,13 @@ export class TaskStore extends DurableObject<Env> {
 		agent_id?: string;
 	}): ActivityLogEntry {
 		this.ensureSchema();
+		const raw = entry.output ? JSON.stringify(entry.output) : null;
+		const output = raw && raw.length > 2000 ? `${raw.slice(0, 2000)}… [truncated]` : raw;
 		const row: ActivityLogEntry = {
 			id: ulid(),
 			tool_name: entry.tool_name,
 			input: JSON.stringify(entry.input),
-			output: entry.output ? JSON.stringify(entry.output) : null,
+			output,
 			agent_id: entry.agent_id ?? null,
 			created_at: new Date().toISOString(),
 		};
@@ -246,11 +238,15 @@ export class TaskStore extends DurableObject<Env> {
 	}
 
 	getActivitySinceLastObservation(): unknown[] {
+		const cols = "id, tool_name, input, agent_id, created_at";
 		const lastObs = this.q("SELECT created_at FROM observations ORDER BY created_at DESC LIMIT 1");
 		const since = (lastObs[0] as { created_at: string } | undefined)?.created_at;
 		return since
-			? this.q("SELECT * FROM activity_log WHERE created_at > ? ORDER BY created_at", since)
-			: this.q("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 50");
+			? this.q(
+					`SELECT ${cols} FROM activity_log WHERE created_at > ? ORDER BY created_at LIMIT 100`,
+					since,
+				)
+			: this.q(`SELECT ${cols} FROM activity_log ORDER BY created_at DESC LIMIT 50`);
 	}
 
 	storeObservation(
@@ -272,9 +268,10 @@ export class TaskStore extends DurableObject<Env> {
 	}
 
 	getRecentObservations(limit = 10): unknown[] {
-		const sql =
-			"SELECT * FROM observations WHERE type = 'observation' ORDER BY created_at DESC LIMIT ?";
-		return this.q(sql, limit);
+		return this.q(
+			"SELECT * FROM observations WHERE type = 'observation' ORDER BY created_at DESC LIMIT ?",
+			limit,
+		);
 	}
 
 	getObservationCount(): number {
@@ -293,7 +290,9 @@ export class TaskStore extends DurableObject<Env> {
 	getContext(): { observations: unknown[]; recent_activity: unknown[] } {
 		return {
 			observations: this.q("SELECT * FROM observations ORDER BY created_at DESC LIMIT 10"),
-			recent_activity: this.q("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 20"),
+			recent_activity: this.q(
+				"SELECT id, tool_name, input, agent_id, created_at FROM activity_log ORDER BY created_at DESC LIMIT 20",
+			),
 		};
 	}
 }
