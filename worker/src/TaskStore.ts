@@ -248,9 +248,9 @@ export class TaskStore extends DurableObject<Env> {
 	getActivitySinceLastObservation(): unknown[] {
 		const lastObs = this.q("SELECT created_at FROM observations ORDER BY created_at DESC LIMIT 1");
 		const since = (lastObs[0] as { created_at: string } | undefined)?.created_at;
-		return since
-			? this.q("SELECT * FROM activity_log WHERE created_at > ? ORDER BY created_at", since)
-			: this.q("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 50");
+		const base = "SELECT * FROM activity_log";
+		if (!since) return this.q(`${base} ORDER BY created_at DESC LIMIT 50`);
+		return this.q(`${base} WHERE created_at > ? ORDER BY created_at DESC LIMIT 50`, since);
 	}
 
 	storeObservation(
