@@ -86,3 +86,5 @@ export const PROJECT_STATUSES: readonly ProjectStatus[] = [
 ] as const;
 
 export const VALID_ESTIMATES = [1, 2, 3, 5, 8] as const;
+
+export const PROJECT_PRIORITIES: readonly ProjectPriority[] = ["low", "medium", "high"] as const;

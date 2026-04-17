@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { SCHEMA } from "./schema";
 import type { ActivityLogEntry, Env, Project, Task } from "./types";
-import { PROJECT_STATUSES, TASK_PRIORITIES, TASK_STATUSES } from "./types";
+import { PROJECT_PRIORITIES, PROJECT_STATUSES, TASK_PRIORITIES, TASK_STATUSES } from "./types";
 import { ulid } from "./ulid";
 import {
 	asStringOrNull,
@@ -107,7 +107,6 @@ export class TaskStore extends DurableObject<Env> {
 	}
 
 	updateTask(id: string, updates: Record<string, unknown>): Task | null {
-		this.ensureSchema();
 		if (!this.getTask(id)) return null;
 		const allowed = [
 			"title",
@@ -154,7 +153,7 @@ export class TaskStore extends DurableObject<Env> {
 			name: name.trim(),
 			description: asStringOrNull(input.description),
 			status: validatedEnum(input.status, PROJECT_STATUSES, "backlog"),
-			priority: validatedEnumOrNull(input.priority, ["low", "medium", "high"] as const),
+			priority: validatedEnumOrNull(input.priority, PROJECT_PRIORITIES),
 			owner: asStringOrNull(input.owner),
 			customer: asStringOrNull(input.customer),
 			created_at: now,
@@ -197,13 +196,15 @@ export class TaskStore extends DurableObject<Env> {
 	}
 
 	updateProject(id: string, updates: Record<string, unknown>): Project | null {
-		this.ensureSchema();
 		if (!this.getProject(id)) return null;
 		const allowed = ["name", "description", "status", "priority", "owner", "customer"];
 		const setClauses: string[] = [];
 		const params: unknown[] = [];
 		for (const key of allowed) {
 			if (!(key in updates)) continue;
+			if (key === "status") validatedEnum(updates[key], PROJECT_STATUSES, "backlog");
+			if (key === "priority" && updates[key] != null)
+				validatedEnumOrNull(updates[key], PROJECT_PRIORITIES);
 			setClauses.push(`${key} = ?`);
 			params.push(updates[key] ?? null);
 		}
@@ -278,10 +279,8 @@ export class TaskStore extends DurableObject<Env> {
 	}
 
 	getObservationCount(): number {
-		const row = this.q(
-			"SELECT COUNT(*) as count FROM observations WHERE type = 'observation'",
-		)[0] as { count: number } | undefined;
-		return row?.count ?? 0;
+		const rows = this.q("SELECT COUNT(*) as count FROM observations WHERE type = 'observation'");
+		return (rows[0] as { count: number } | undefined)?.count ?? 0;
 	}
 
 	executeQuery(sql: string): unknown[] {
